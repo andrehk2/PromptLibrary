@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mijn Prompt Bibliotheek (Cloud)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: #6366F1;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <main class="bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-2xl mx-auto">
+        
+        <!-- Header en Zoekfunctie Container -->
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+            <header class="text-center sm:text-left">
+                <h1 class="text-3xl font-bold text-white">Mijn Prompt Bibliotheek</h1>
+                <p class="text-gray-400 mt-2">Bewaar en doorzoek al je favoriete prompts.</p>
+            </header>
+            <div class="flex items-center gap-4">
+                 <input type="text" id="search-input" placeholder="Zoek..." class="w-full sm:w-60 bg-gray-700 border-2 border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+        </div>
+
+        <!-- Nieuwe Prompt Toevoegen -->
+        <div class="mb-6">
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex-grow flex flex-col gap-3">
+                    <input type="text" id="new-prompt-title" placeholder="Titel van je prompt..." class="w-full bg-gray-700 border-2 border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <textarea id="new-prompt-input" placeholder="Voer hier de inhoud van je prompt in..." class="w-full bg-gray-700 border-2 border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" rows="6"></textarea>
+                    <input type="text" id="new-prompt-platform" placeholder="AI-platform (bijv. Gemini, ChatGPT)..." class="w-full bg-gray-700 border-2 border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button id="add-prompt-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500 self-stretch sm:self-auto">
+                    Opslaan
+                </button>
+            </div>
+        </div>
+
+        <!-- Laadindicator -->
+        <div id="loader-container" class="text-center py-10">
+            <div class="loader mx-auto"></div>
+            <p class="mt-4 text-gray-400">Prompts laden...</p>
+        </div>
+
+        <!-- Container voor de weergave -->
+        <div id="view-container">
+            <!-- Lijst weergave met titels -->
+            <div id="prompt-list-view" class="space-y-2 max-h-[50vh] overflow-y-auto pr-2">
+                <!-- Titels worden hier geladen -->
+            </div>
+            <!-- Detail weergave van één prompt -->
+            <div id="prompt-detail-container" class="hidden">
+                <!-- Details worden hier geladen -->
+            </div>
+        </div>
+        
+        <!-- Lege staat bericht -->
+        <div id="empty-state" class="hidden text-center py-10 px-4">
+             <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-300">Nog geen prompts</h3>
+            <p class="mt-1 text-sm text-gray-500">Begin met het toevoegen van een prompt hierboven.</p>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // DOM-elementen
+        const newPromptTitle = document.getElementById('new-prompt-title');
+        const newPromptInput = document.getElementById('new-prompt-input');
+        const newPromptPlatform = document.getElementById('new-prompt-platform');
+        const addPromptBtn = document.getElementById('add-prompt-btn');
+        const searchInput = document.getElementById('search-input');
+        const loaderContainer = document.getElementById('loader-container');
+        const viewContainer = document.getElementById('view-container');
+        const promptListView = document.getElementById('prompt-list-view');
+        const promptDetailContainer = document.getElementById('prompt-detail-container');
+        const emptyState = document.getElementById('empty-state');
+
+        // Globale variabelen
+        let allPrompts = [];
+        let selectedPromptId = null;
+        let db, auth, userId, promptsCollectionRef;
+
+        // --- Firebase Initialisatie ---
+        async function initializeFirebase() {
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'prompt-app-default';
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        promptsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/prompts`);
+                        setupRealtimeListener();
+                    } else {
+                        signInUser();
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialisatie mislukt:", error);
+                loaderContainer.innerHTML = '<p class="text-red-400">Kon niet verbinden met de database.</p>';
+            }
+        }
+
+        async function signInUser() {
+            try {
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) await signInWithCustomToken(auth, token);
+                else await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Inloggen mislukt:", error);
+                loaderContainer.innerHTML = '<p class="text-red-400">Authenticatie mislukt.</p>';
+            }
+        }
+
+        // --- Real-time data listener ---
+        function setupRealtimeListener() {
+            const q = query(promptsCollectionRef);
+            onSnapshot(q, (querySnapshot) => {
+                const fetchedPrompts = [];
+                querySnapshot.forEach((doc) => fetchedPrompts.push({ id: doc.id, ...doc.data() }));
+                allPrompts = fetchedPrompts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                loaderContainer.classList.add('hidden');
+                renderAppView();
+            }, (error) => {
+                console.error("Fout bij ophalen van data: ", error);
+                loaderContainer.innerHTML = '<p class="text-red-400">Kon prompts niet laden.</p>';
+            });
+        }
+
+        // --- Hoofd render functie ---
+        function renderAppView() {
+            emptyState.classList.add('hidden');
+            if (selectedPromptId) {
+                renderDetailView();
+            } else {
+                renderListView();
+            }
+        }
+
+        // --- Render de lijst met titels ---
+        function renderListView() {
+            promptDetailContainer.classList.add('hidden');
+            promptListView.classList.remove('hidden');
+            promptListView.innerHTML = '';
+            
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredPrompts = allPrompts.filter(p => {
+                const titleMatch = p.title && p.title.toLowerCase().includes(searchTerm);
+                const textMatch = p.text && p.text.toLowerCase().includes(searchTerm);
+                const platformMatch = p.platform && p.platform.toLowerCase().includes(searchTerm);
+                return titleMatch || textMatch || platformMatch;
+            });
+
+            if (allPrompts.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            
+            if (filteredPrompts.length === 0) {
+                 promptListView.innerHTML = `<div class="text-center py-10 px-4 text-gray-500">Geen prompts gevonden.</div>`;
+            }
+
+            filteredPrompts.forEach(prompt => {
+                const titleElement = document.createElement('button');
+                titleElement.className = 'w-full bg-gray-700 p-3 rounded-lg text-left truncate hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
+                titleElement.textContent = prompt.title;
+                titleElement.dataset.id = prompt.id;
+                promptListView.appendChild(titleElement);
+            });
+        }
+
+        // --- Render de detailweergave van één prompt ---
+        function renderDetailView() {
+            promptListView.classList.add('hidden');
+            promptDetailContainer.classList.remove('hidden');
+            promptDetailContainer.innerHTML = '';
+
+            const prompt = allPrompts.find(p => p.id === selectedPromptId);
+            if (!prompt) {
+                selectedPromptId = null;
+                renderAppView();
+                return;
+            }
+
+            const detailElement = document.createElement('div');
+            detailElement.dataset.id = prompt.id;
+            detailElement.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="font-bold text-xl text-white">${escapeHTML(prompt.title)}</h3>
+                        <p class="text-sm text-gray-400 mt-1">Platform: ${escapeHTML(prompt.platform || 'Niet opgegeven')}</p>
+                    </div>
+                    <button class="back-btn bg-gray-600 hover:bg-gray-500 text-white font-medium py-1 px-3 rounded-md">Terug</button>
+                </div>
+                <div class="bg-gray-700 p-4 rounded-lg mb-4">
+                    <p class="prompt-text text-gray-300 whitespace-pre-wrap">${escapeHTML(prompt.text)}</p>
+                </div>
+                <div class="flex items-center gap-2 justify-end">
+                    <button class="edit-btn bg-gray-600 hover:bg-gray-500 text-white font-medium py-1 px-3 rounded-md">Edit</button>
+                    <button class="delete-btn bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-3 rounded-md">Verwijder</button>
+                </div>
+            `;
+            promptDetailContainer.appendChild(detailElement);
+        }
+
+        // --- Functie om HTML te escapen ---
+        const escapeHTML = (str) => {
+            const p = document.createElement('p');
+            p.textContent = str;
+            return p.innerHTML;
+        };
+
+        // --- Functie om een nieuwe prompt toe te voegen ---
+        async function addPrompt() {
+            const title = newPromptTitle.value.trim();
+            const text = newPromptInput.value.trim();
+            const platform = newPromptPlatform.value.trim();
+            if (text && title && promptsCollectionRef) {
+                try {
+                    await addDoc(promptsCollectionRef, { title, text, platform, createdAt: serverTimestamp() });
+                    newPromptTitle.value = '';
+                    newPromptInput.value = '';
+                    newPromptPlatform.value = '';
+                    newPromptTitle.focus();
+                } catch (error) {
+                    console.error("Fout bij toevoegen prompt: ", error);
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+        addPromptBtn.addEventListener('click', addPrompt);
+        searchInput.addEventListener('input', renderAppView);
+
+        viewContainer.addEventListener('click', async (e) => {
+            const target = e.target;
+            
+            if (target.closest('#prompt-list-view') && target.dataset.id) {
+                selectedPromptId = target.dataset.id;
+                renderAppView();
+                return;
+            }
+
+            const detailView = target.closest('#prompt-detail-container');
+            if (!detailView) return;
+
+            const id = detailView.querySelector('[data-id]').dataset.id;
+            const docRef = doc(promptsCollectionRef, id);
+
+            if (target.classList.contains('back-btn')) {
+                selectedPromptId = null;
+                renderAppView();
+            }
+            
+            if (target.classList.contains('delete-btn')) {
+                try {
+                    await deleteDoc(docRef);
+                    selectedPromptId = null;
+                } catch (error) {
+                    console.error("Fout bij verwijderen: ", error);
+                }
+            }
+
+            if (target.classList.contains('edit-btn')) {
+                const prompt = allPrompts.find(p => p.id === id);
+                if (!prompt) return;
+                
+                detailView.querySelector('[data-id]').innerHTML = `
+                    <input type="text" class="edit-title-input w-full bg-gray-600 border-2 border-gray-500 rounded-lg p-3 mb-2" value="${escapeHTML(prompt.title)}">
+                    <textarea class="edit-textarea w-full bg-gray-600 border-2 border-gray-500 rounded-lg p-3 mb-2" rows="7">${escapeHTML(prompt.text)}</textarea>
+                    <input type="text" class="edit-platform-input w-full bg-gray-600 border-2 border-gray-500 rounded-lg p-3" value="${escapeHTML(prompt.platform || '')}" placeholder="AI-platform...">
+                    <div class="flex items-center gap-2 justify-end mt-4">
+                        <button class="save-edit-btn bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-3 rounded-md">Opslaan</button>
+                        <button class="cancel-edit-btn bg-gray-600 hover:bg-gray-500 text-white font-medium py-1 px-3 rounded-md">Annuleren</button>
+                    </div>
+                `;
+            }
+
+            if (target.classList.contains('save-edit-btn')) {
+                const newTitle = detailView.querySelector('.edit-title-input').value.trim();
+                const newText = detailView.querySelector('.edit-textarea').value.trim();
+                const newPlatform = detailView.querySelector('.edit-platform-input').value.trim();
+                if (newText && newTitle) {
+                    try {
+                        await setDoc(docRef, { title: newTitle, text: newText, platform: newPlatform }, { merge: true });
+                    } catch (error) {
+                        console.error("Fout bij updaten: ", error);
+                    }
+                }
+            }
+
+            if (target.classList.contains('cancel-edit-btn')) {
+                renderAppView();
+            }
+        });
+
+        // --- Start de applicatie ---
+        initializeFirebase();
+    </script>
+</body>
+</html>

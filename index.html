@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PromptApp 20</title>
+    <style>
+        :root { --primary: #2563eb; --primary-hover: #1d4ed8; --bg: #f8fafc; --surface: #ffffff; --border: #cbd5e1; --text: #0f172a; --accent: #9333ea; --success: #16a34a; --error: #dc2626; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: var(--bg); color: var(--text); padding: 15px; -webkit-font-smoothing: antialiased; }
+        .container { max-width: 900px; margin: 0 auto; background: var(--surface); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { font-size: 24px; color: #1e3a8a; margin-bottom: 5px; text-align: center; }
+        p.subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 20px; }
+        
+        .section { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); }
+        .section-header { font-weight: bold; color: var(--primary); margin-bottom: 10px; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+        
+        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+        input, textarea, select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px; font-family: inherit; background: #fff; margin-bottom: 15px; transition: border-color 0.2s; }
+        textarea { resize: vertical; min-height: 90px; }
+        textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+        
+        .row-inputs { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 5px; }
+        .row-inputs > div { flex: 1; min-width: 200px; }
+        
+        .button-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+        button { background-color: var(--primary); color: white; border: none; padding: 14px 18px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; flex: 1; min-width: 150px; transition: all 0.2s ease; }
+        button:active { background-color: var(--primary-hover); transform: scale(0.98); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        
+        button.success { background-color: var(--success); }
+        button.magic { background-color: var(--accent); }
+        button.secondary { background-color: #475569; }
+        button.small { padding: 6px 12px; font-size: 13px; min-width: auto; flex: none; }
+        button.mic-btn { background-color: #3b82f6; min-width: 120px; transition: background-color 0.3s; }
+        
+        .hidden { display: none !important; }
+        #js-warning { background-color: var(--error); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 2px solid #b91c1c; }
+        
+        .ai-modifier-box { background: #e0e7ff; padding: 15px; border-radius: 8px; border: 1px dashed #818cf8; margin-bottom: 15px; }
+        
+        .simulator { margin-top: 25px; border: 1px solid var(--border); border-radius: 12px; padding: 15px; background: #e2e8f0; }
+        .device-toggles { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .device-btn { background: #cbd5e1; color: #334155; padding: 8px 15px; flex: none; min-width: auto; }
+        .device-btn.active { background: #334155; color: white; }
+        .iframe-wrapper { background: white; border-radius: 8px; overflow: hidden; margin: 0 auto; transition: all 0.3s ease; border: 1px solid #cbd5e1; }
+        iframe { width: 100%; height: 100%; border: none; background: #fff; }
+        
+        .size-desktop { width: 100%; height: 500px; }
+        .size-tablet { width: 768px; height: 1024px; max-width: 100%; }
+        .size-mobile { width: 375px; height: 667px; max-width: 100%; }
+        
+        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: #f59e0b; margin-right: 5px; }
+        .status-dot.connected { background-color: var(--success); }
+        .status-dot.error { background-color: var(--error); }
+
+        /* Database List Styling */
+        .db-item { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+        .db-item-title { font-weight: bold; font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 5px; }
+        .db-item-date { font-size: 12px; color: #64748b; margin-top: 4px; }
+        .db-actions { display: flex; gap: 8px; }
+        
+        /* Auth Screen */
+        #auth-section { text-align: center; padding: 30px 10px; }
+    </style>
+
+    <!-- Firebase SDK's (Compat versie) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <div id="js-warning">
+        <h3 style="margin-bottom: 5px; color: white;">⚠️ Scripts Geblokkeerd!</h3>
+        <p style="font-size: 14px; margin: 0;">Je apparaat blokkeert de code of je hebt het lokaal (file://) geopend. Zorg dat je een link gebruikt die met https:// begint!</p>
+    </div>
+
+    <h1>✨ PromptApp 20</h1>
+    
+    <!-- AUTHENTICATIE SCHERM -->
+    <div id="auth-section">
+        <h3 style="color: #1e3a8a; margin-bottom: 15px;">Welkom bij jullie eigen App! 🚀</h3>
+        <p style="margin-bottom: 20px; color: #64748b; font-size: 14px;">Vul hieronder éénmalig je <b>Gemini API-sleutel</b> in. Deze wordt veilig en uitsluitend lokaal op dit apparaat bewaard.</p>
+        <input type="password" id="input-api-key" placeholder="Plak je Gemini API-sleutel hier...">
+        <button type="button" onclick="saveApiKeyAndStart()" class="success" style="width: 100%;">Opslaan & Starten</button>
+    </div>
+
+    <!-- HOOFD APP -->
+    <div id="main-app" class="hidden">
+        <p class="subtitle" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>
+                <span id="api-status-dot" class="status-dot"></span>
+                <span id="api-status">Verbinden met AI...</span>
+            </span>
+            <button type="button" class="secondary small" onclick="logout()" style="flex: none; min-width: auto;">Sleutel wissen</button>
+        </p>
+
+        <!-- STAP 1: SCHETS -->
+        <h3 style="margin-bottom: 15px; color: #1e3a8a; font-size: 18px;">1. Basis & Schets</h3>
+        
+        <div class="row-inputs">
+            <div>
+                <label>Platform / Doel:</label>
+                <input type="text" id="platform" value="Multiplatform App (iOS, Windows, Mac)">
+            </div>
+            <div>
+                <label>App Titel:</label>
+                <input type="text" id="app-title" value="MijnSuperApp">
+            </div>
+            <div style="flex: 0.5; min-width: 100px;">
+                <label>Versie:</label>
+                <input type="text" id="app-version" value="v1.0">
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
+            <label style="margin-bottom: 0;">Ruwe Schets:</label>
+            <button type="button" id="btn-mic" class="small mic-btn" onclick="toggleSpeechRecognition()" style="margin-bottom: 0;">🎙️ Spreek in</button>
+        </div>
+        <textarea id="rough-sketch" placeholder="Typ of spreek je ruwe idee hier in... (bijv. app met een takenlijst en dark mode)"></textarea>
+
+        <div class="button-group">
+            <button type="button" id="btn-ask-ai" disabled onclick="askQuestions()">Vraag AI om 5 Verfijningsvragen</button>
+        </div>
+
+        <!-- STAP 2: VRAGEN -->
+        <div id="questions-section" class="section hidden">
+            <div class="section-header">🤖 AI Feedback Vragen</div>
+            <p id="ai-questions-text" style="font-size: 14px; margin-bottom: 15px; white-space: pre-wrap; font-weight: 500; line-height: 1.5;"></p>
+            <textarea id="ai-answers" placeholder="Beantwoord de vragen hier zo goed mogelijk..."></textarea>
+            
+            <div class="button-group">
+                <button type="button" id="btn-generate-prompt" class="success" onclick="generatePrompt()">Genereer Perfecte Prompt</button>
+            </div>
+        </div>
+
+        <!-- STAP 3: RESULTAAT -->
+        <div id="result-section" class="hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label id="prompt-version-label" style="margin-bottom: 0; font-size: 18px; color: #1e3a8a;">3. De Perfecte Prompt (v1):</label>
+                <button type="button" class="secondary small" onclick="focusEditPrompt()">✍️ Handmatig bewerken</button>
+            </div>
+            <textarea id="perfect-prompt" style="min-height: 200px;"></textarea>
+
+            <!-- AI AANPASSINGEN BOX -->
+            <div class="ai-modifier-box">
+                <label style="font-size: 13px; color: #4338ca; margin-bottom: 5px;">✨ AI Aanpassing (Geef AI een instructie om de prompt te wijzigen):</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" id="ai-modifier-feedback" placeholder="Bijv. Maak de app donker van kleur..." style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                    <button type="button" id="btn-ai-modify" class="magic small" style="font-size: 14px; padding: 12px 15px;" onclick="modifyPromptViaAI()">Pas Prompt Aan</button>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="button" id="btn-copy" class="secondary" onclick="copyPrompt()">📋 Kopieer Prompt</button>
+                <button type="button" id="btn-save" class="success" onclick="savePromptToFirebase()">☁️ Opslaan in Gedeelde Cloud</button>
+                <button type="button" id="btn-code" class="magic" onclick="codeApp()">⚙️ Codeer & Run Simulator</button>
+            </div>
+        </div>
+
+        <!-- STAP 4: SIMULATOR -->
+        <div id="simulator-section" class="simulator hidden">
+            <h3 style="text-align: center; margin-bottom: 5px;">Live Output / Code Weergave</h3>
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 15px; text-align: center; line-height: 1.4; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px dashed #cbd5e1;">
+                ℹ️ <b>Let op:</b> De AI probeert de app nu in HTML/JS te schrijven zodat hij hier direct werkt. Adviseert de AI toch een andere taal of Visual Studio Code omgeving? Dan zie je hieronder mogelijk alleen de ruwe code in tekstvorm. Gebruik dan de knoppen hieronder om je code veilig op te slaan!
+            </p>
+            <div class="device-toggles">
+                <button type="button" class="device-btn active" id="btn-desktop" onclick="setDevice('desktop')">💻 Mac/PC</button>
+                <button type="button" class="device-btn" id="btn-tablet" onclick="setDevice('tablet')">💊 iPad</button>
+                <button type="button" class="device-btn" id="btn-mobile" onclick="setDevice('mobile')">📱 iPhone</button>
+            </div>
+            <div id="iframe-wrapper" class="iframe-wrapper size-desktop" style="margin-bottom: 15px;">
+                <iframe id="live-preview" sandbox="allow-scripts"></iframe>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" class="secondary" onclick="copyCode()">📋 Kopieer code</button>
+                <button type="button" class="success" onclick="saveCode()">💾 Save code</button>
+            </div>
+        </div>
+
+        <!-- DATABASE (FIREBASE CLOUD) -->
+        <div class="section" style="margin-top: 30px; background: #e0e7ff; border-color: #818cf8;">
+            <div class="section-header">☁️ Gedeelde Cloud Database</div>
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Alles wat hier staat, wordt direct gesynchroniseerd met alle apparaten via Firebase.</p>
+            <div id="firebase-list">
+                <p style="font-size: 14px; color: #64748b;">Verbinden met de Cloud...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('js-warning').style.display = 'none';
+
+    // ==========================================
+    // ⚙️ JOUW EIGEN FIREBASE CONFIGURATIE 
+    // PLAK HIER ONDER WEER EVEN JE EIGEN GEGEVENS!
+    // ==========================================
+    const jouwFirebaseConfig = {
+        apiKey: "AIzaSyB4H3BmmYZCgJ0PueJQOaRuzJyUbPvFits",
+        authDomain: "promptapp-a9254.firebaseapp.com",
+        projectId: "promptapp-a9254",
+        storageBucket: "promptapp-a9254.firebasestorage.app",
+        messagingSenderId: "375908075607",
+        appId: "1:375908075607:web:9ae006d02b42de7f42fb12",
+        measurementId: "G-GPPVXVYVL9"
+    };
+
+    let db;
+    try {
+        firebase.initializeApp(jouwFirebaseConfig);
+        db = firebase.firestore();
+    } catch (e) {
+        console.error("Firebase kon niet starten: " + e.message);
+    }
+
+    let currentModel = "";
+    let promptVersion = 1;
+    let MIJN_API_SLEUTEL = "";
+    let latestAppCode = ""; 
+    window.cloudPrompts = {};
+
+    function updateStatus(text, state = 'loading') {
+        const statusText = document.getElementById('api-status');
+        const statusDot = document.getElementById('api-status-dot');
+        statusText.textContent = text;
+        statusDot.className = 'status-dot';
+        if (state === 'success') statusDot.classList.add('connected');
+        if (state === 'error') statusDot.classList.add('error');
+    }
+
+    // ==========================================
+    // 🎤 SPRAAKHERKENNING LOGICA (Nieuw: 5 Minuten Timer)
+    // ==========================================
+    let recognition;
+    let isRecording = false;
+    let recordingTimer; 
+
+    function toggleSpeechRecognition() {
+        const btn = document.getElementById('btn-mic');
+        const textArea = document.getElementById('rough-sketch');
+
+        if (!recognition) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Jouw browser of besturingssysteem ondersteunt helaas nog geen spraakherkenning in Safari.");
+                return;
+            }
+            recognition = new SpeechRecognition();
+            recognition.lang = 'nl-NL';
+            
+            // Nu staat hij continu aan zodat hij niet stopt na een stilte
+            recognition.continuous = true; 
+            recognition.interimResults = false;
+
+            recognition.onstart = function() {
+                isRecording = true;
+                btn.style.backgroundColor = "#ef4444";
+                btn.textContent = "🛑 Luistert (max 5 min)...";
+                
+                // Harde limiet van 5 minuten (300.000 ms)
+                recordingTimer = setTimeout(() => {
+                    if (isRecording) {
+                        stopRecording();
+                        alert("De maximale opnametijd van 5 minuten is bereikt.");
+                    }
+                }, 300000);
+            };
+
+            recognition.onresult = function(event) {
+                // Pak het laatst gesproken stukje
+                const currentIndex = event.resultIndex;
+                const transcript = event.results[currentIndex][0].transcript;
+                
+                if (textArea.value) {
+                    textArea.value += " " + transcript;
+                } else {
+                    textArea.value = transcript;
+                }
+            };
+
+            recognition.onerror = function(event) {
+                console.error("Spraakherkenning fout:", event.error);
+                // No-speech negeren we, andere fouten stoppen de opname
+                if (event.error !== 'no-speech') {
+                    stopRecording();
+                }
+            };
+
+            recognition.onend = function() {
+                // Failsafe: als de browser de microfoon onverwacht uitschakelt 
+                // (voordat je zelf op stop drukt of de 5 minuten om zijn), start hem dan direct weer.
+                if (isRecording) {
+                    try {
+                        recognition.start();
+                    } catch(e) {
+                        stopRecording();
+                    }
+                }
+            };
+        }
+
+        if (isRecording) {
+            stopRecording();
+        } else {
+            try {
+                recognition.start();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+    }
+
+    function stopRecording() {
+        isRecording = false;
+        clearTimeout(recordingTimer); // Wekker uitzetten
+        const btn = document.getElementById('btn-mic');
+        btn.style.backgroundColor = "#3b82f6";
+        btn.textContent = "🎙️ Spreek in";
+        if (recognition) {
+            recognition.stop();
+        }
+    }
+
+    // ==========================================
+    // 🔐 AUTHENTICATIE LOGICA
+    // ==========================================
+    window.onload = function() {
+        const savedKey = localStorage.getItem('geminiApiKey');
+        if (savedKey) {
+            MIJN_API_SLEUTEL = savedKey;
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            initializeApp();
+        }
+    };
+
+    function saveApiKeyAndStart() {
+        const keyInput = document.getElementById('input-api-key').value.trim();
+        if (!keyInput) { 
+            alert("Vul een geldige Gemini sleutel in."); 
+            return; 
+        }
+        localStorage.setItem('geminiApiKey', keyInput);
+        MIJN_API_SLEUTEL = keyInput;
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('main-app').classList.remove('hidden');
+        initializeApp();
+    }
+
+    function logout() {
+        if(confirm("Weet je zeker dat je de Gemini-sleutel wilt wissen?")) {
+            localStorage.removeItem('geminiApiKey');
+            location.reload();
+        }
+    }
+
+    // ==========================================
+    // 🚀 HOOFD LOGICA & AI VERBINDING
+    // ==========================================
+    async function initializeApp() {
+        if(db) listenToFirebase(); 
+        
+        try {
+            const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + MIJN_API_SLEUTEL);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                if (response.status === 400 || response.status === 403) {
+                    logout();
+                    alert("De API-sleutel werd geweigerd. Vul hem opnieuw in.");
+                    return;
+                }
+                throw new Error(data.error?.message || "Fout bij ophalen.");
+            }
+
+            let hasModels = false;
+            let fallbackModel = null;
+            
+            data.models.forEach(model => {
+                const nameLower = model.name.toLowerCase();
+                const isGemini = nameLower.includes('gemini');
+                const isNotVisionOrEmbedding = !nameLower.includes('vision') && !nameLower.includes('embedding');
+                
+                if (model.supportedGenerationMethods?.includes('generateContent') && isGemini && isNotVisionOrEmbedding) {
+                    if (!fallbackModel) fallbackModel = model.name;
+                    if (nameLower.includes('1.5-flash') && !currentModel) {
+                        currentModel = model.name;
+                    }
+                    hasModels = true;
+                }
+            });
+
+            if (hasModels) {
+                if (!currentModel) currentModel = fallbackModel;
+                document.getElementById('btn-ask-ai').disabled = false;
+                updateStatus("✅ Verbonden met AI", "success");
+            } else {
+                throw new Error("Geen modellen gevonden.");
+            }
+        } catch (error) {
+            updateStatus("API Fout: " + error.message, "error");
+        }
+    }
+
+    async function callGeminiAPI(promptText) {
+        if (!currentModel) throw new Error("App is niet verbonden met de AI. Herlaad de pagina.");
+
+        const url = "https://generativelanguage.googleapis.com/v1beta/" + currentModel + ":generateContent?key=" + MIJN_API_SLEUTEL;
+        const payload = { contents: [{ role: "user", parts: [{ text: promptText }] }] };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            if (response.status === 429) {
+                throw new Error("Je gaat te snel voor Google! Wacht even.");
+            }
+            throw new Error(data.error?.message || "Serverfout bij Google.");
+        }
+        
+        if (data.promptFeedback?.blockReason) throw new Error("Geblokkeerd. Reden: " + data.promptFeedback.blockReason);
+        return data.candidates[0].content.parts[0].text;
+    }
+
+    function cleanGeneratedCode(rawCode) {
+        let code = rawCode.trim();
+        if (code.indexOf("```html") === 0) code = code.substring(7);
+        else if (code.indexOf("```") === 0) code = code.substring(3);
+        if (code.lastIndexOf("```") === code.length - 3) code = code.substring(0, code.length - 3);
+        return code.trim();
+    }
+
+    async function askQuestions() {
+        const btn = document.getElementById('btn-ask-ai');
+        const sketch = document.getElementById('rough-sketch').value.trim();
+        if (!sketch) { 
+            alert("Vul eerst een ruwe schets in!"); 
+            return; 
+        }
+
+        btn.textContent = "AI stelt vragen..."; btn.disabled = true;
+
+        try {
+            const promptStr = "Ik wil een app bouwen. Ruwe schets is: \"" + sketch + "\". Stel mij exact 5 gerichte, genummerde vragen. Geef ALLEEN de 5 vragen terug.";
+            const responseText = await callGeminiAPI(promptStr);
+            document.getElementById('ai-questions-text').textContent = responseText;
+            document.getElementById('questions-section').classList.remove('hidden');
+            btn.textContent = "Vragen Ontvangen";
+        } catch (error) {
+            alert("Fout: " + error.message);
+            btn.textContent = "Vraag AI om 5 Verfijningsvragen"; btn.disabled = false;
+        }
+    }
+
+    async function generatePrompt() {
+        const btn = document.getElementById('btn-generate-prompt');
+        const platform = document.getElementById('platform').value.trim();
+        const sketch = document.getElementById('rough-sketch').value.trim();
+        const answers = document.getElementById('ai-answers').value.trim();
+
+        btn.textContent = "Prompt Genereren..."; btn.disabled = true;
+
+        try {
+            const promptStr = "Schrijf een perfecte, gedetailleerde prompt voor \"" + platform + "\". Use case: \"" + sketch + "\". Antwoorden: \"" + answers + "\". Lever alleen de resulterende prompt tekst op.";
+            const responseText = await callGeminiAPI(promptStr);
+            promptVersion = 1; updateVersionLabel();
+            
+            document.getElementById('perfect-prompt').value = responseText;
+            document.getElementById('result-section').classList.remove('hidden');
+            btn.textContent = "Perfecte Prompt Gegenereerd"; btn.disabled = false;
+        } catch (error) {
+            alert("Fout: " + error.message);
+            btn.textContent = "Genereer Perfecte Prompt"; btn.disabled = false;
+        }
+    }
+
+    function focusEditPrompt() {
+        const textarea = document.getElementById('perfect-prompt');
+        textarea.focus();
+        textarea.selectionStart = textarea.value.length;
+        textarea.selectionEnd = textarea.value.length;
+    }
+
+    async function modifyPromptViaAI() {
+        const btn = document.getElementById('btn-ai-modify');
+        const currentPrompt = document.getElementById('perfect-prompt').value.trim();
+        const feedback = document.getElementById('ai-modifier-feedback').value.trim();
+
+        if (!currentPrompt) { 
+            alert("Er is geen prompt om aan te passen!"); 
+            return; 
+        }
+        if (!feedback) { 
+            alert("Vul in wat de AI moet aanpassen."); 
+            return; 
+        }
+
+        btn.textContent = "Aanpassen..."; btn.disabled = true;
+
+        try {
+            const instructie = "Hier is de huidige prompt:\n\n" + currentPrompt + "\n\nAanpassing:\n\"" + feedback + "\"\n\nSchrijf de verbeterde prompt uit. Lever ALLEEN de nieuwe tekst op.";
+            const newPrompt = await callGeminiAPI(instructie);
+            
+            promptVersion++; updateVersionLabel();
+            document.getElementById('perfect-prompt').value = newPrompt;
+            document.getElementById('ai-modifier-feedback').value = ""; 
+            
+            btn.textContent = "Pas Prompt Aan"; btn.disabled = false;
+            focusEditPrompt();
+        } catch (error) {
+            alert("Fout bij aanpassen: " + error.message);
+            btn.textContent = "Pas Prompt Aan"; btn.disabled = false;
+        }
+    }
+
+    function updateVersionLabel() {
+        document.getElementById('prompt-version-label').innerText = "3. De Perfecte Prompt (v" + promptVersion + "):";
+    }
+
+    function fallbackCopyTextToClipboard(text, alertMsg) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text; textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus(); textArea.select();
+        try { 
+            document.execCommand('copy'); 
+            alert(alertMsg); 
+        } catch (err) { 
+            alert('Fout bij kopiëren'); 
+        }
+        document.body.removeChild(textArea);
+    }
+
+    function copyPrompt() {
+        const text = document.getElementById('perfect-prompt').value;
+        if (!text) return;
+        fallbackCopyTextToClipboard(text, "Prompt (v" + promptVersion + ") gekopieerd naar klembord!");
+    }
+
+    // ==========================================
+    // ☁️ FIREBASE CLOUD DATABASE LOGICA
+    // ==========================================
+    function savePromptToFirebase() {
+        if(!db) { 
+            alert("Firebase is niet goed ingesteld."); 
+            return; 
+        }
+        const promptText = document.getElementById('perfect-prompt').value;
+        if (!promptText) return;
+        
+        const title = document.getElementById('app-title').value.trim() || 'MijnApp';
+        const displayTitle = title + " (v" + promptVersion + ")";
+        
+        db.collection("prompts").add({
+            title: displayTitle,
+            text: promptText,
+            appCode: latestAppCode || "",
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            alert("Opgeslagen in de gedeelde Cloud (inclusief app-code als die gebouwd is)! ☁️");
+        }).catch((error) => {
+            alert("Fout bij opslaan: " + error.message);
+        });
+    }
+
+    function listenToFirebase() {
+        if(!db) return;
+        db.collection("prompts").orderBy("timestamp", "desc").onSnapshot((querySnapshot) => {
+            const listContainer = document.getElementById('firebase-list');
+            listContainer.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                listContainer.innerHTML = '<p style="font-size: 14px; color: #64748b;">Nog geen opgeslagen prompts in de cloud.</p>';
+                return;
+            }
+
+            window.cloudPrompts = {};
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                window.cloudPrompts[doc.id] = data;
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'db-item';
+                
+                let dateString = "Zojuist";
+                if(data.timestamp) dateString = data.timestamp.toDate().toLocaleString('nl-NL');
+                
+                const hasApp = data.appCode && data.appCode.trim() !== "" ? " 📱" : "";
+                
+                itemDiv.innerHTML = `
+                    <div>
+                        <div class="db-item-title">${data.title}${hasApp}</div>
+                        <div class="db-item-date">${dateString}</div>
+                    </div>
+                    <div class="db-actions">
+                        <button class="magic small" onclick="loadFromCloud('${doc.id}')">🚀 Laad</button>
+                        <button class="secondary small" onclick="copyFromCloud('${doc.id}')">📋</button>
+                        <button class="small" style="background-color:#ef4444;" onclick="deleteFromFirebase('${doc.id}')">🗑️</button>
+                    </div>
+                `;
+                
+                listContainer.appendChild(itemDiv);
+            });
+        });
+    }
+
+    function loadFromCloud(docId) {
+        const data = window.cloudPrompts[docId];
+        if (!data) return;
+
+        document.getElementById('perfect-prompt').value = data.text;
+        document.getElementById('result-section').classList.remove('hidden');
+
+        if (data.appCode && data.appCode.trim() !== "") {
+            latestAppCode = data.appCode;
+            document.getElementById('simulator-section').classList.remove('hidden');
+            document.getElementById('live-preview').srcdoc = latestAppCode;
+        } else {
+            latestAppCode = "";
+            document.getElementById('simulator-section').classList.add('hidden');
+            document.getElementById('live-preview').srcdoc = "";
+        }
+
+        document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function copyFromCloud(docId) {
+        const data = window.cloudPrompts[docId];
+        if (data && data.text) {
+            fallbackCopyTextToClipboard(data.text, "Prompt gekopieerd uit de Cloud!");
+        }
+    }
+
+    function deleteFromFirebase(docId) {
+        if(confirm("Weet je zeker dat je dit wilt verwijderen? (Het verdwijnt bij iedereen!)")) {
+            db.collection("prompts").doc(docId).delete();
+        }
+    }
+
+    // ==========================================
+    // ⚙️ CODEER & SIMULATOR LOGICA
+    // ==========================================
+    async function codeApp() {
+        const perfectPrompt = document.getElementById('perfect-prompt').value.trim();
+        if (!perfectPrompt) return;
+        const btn = document.getElementById('btn-code');
+        btn.textContent = "Aan het bouwen... (Wacht even)"; btn.disabled = true;
+
+        try {
+            const instructieCode = "Je bent een software developer. Schrijf op basis van de prompt de benodigde code. EISEN:\n1. Schrijf bij voorkeur een single-file HTML/CSS/JS web-app, zodat deze direct lokaal in een browser (en op een iPhone) kan draaien.\n2. Als een andere taal (zoals Python, Flutter) of een backend (zoals Firebase) véél beter geschikt is, schrijf dan die code in de plaats. Houd er hierbij rekening mee dat coderen via Visual Studio Code de nadrukkelijke voorkeur heeft als HTML niet volstaat. Lever indien nodig een duidelijke, modulaire setup aan die in VS Code draait. Zet bovenaan in de code als commentaar een heel kort advies waarom je daarvoor hebt gekozen in plaats van HTML.\n3. Geef verder UITSLUITEND de rauwe code of configuratie terug, zonder kletspraatjes eromheen.\n\nPROMPT:\n" + perfectPrompt;
+            const rawResponse = await callGeminiAPI(instructieCode);
+            
+            latestAppCode = cleanGeneratedCode(rawResponse);
+            
+            document.getElementById('simulator-section').classList.remove('hidden');
+            document.getElementById('live-preview').srcdoc = latestAppCode;
+        } catch (error) {
+            alert("Fout tijdens coderen: " + error.message);
+        }
+        btn.textContent = "⚙️ Codeer & Run Simulator"; btn.disabled = false;
+    }
+
+    function setDevice(device) {
+        document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById("btn-" + device).classList.add('active');
+        document.getElementById('iframe-wrapper').className = "iframe-wrapper size-" + device;
+    }
+
+    function copyCode() {
+        if (!latestAppCode) {
+            alert("Er is nog geen code gegenereerd!");
+            return;
+        }
+        fallbackCopyTextToClipboard(latestAppCode, "De code is gekopieerd naar je klembord!");
+    }
+
+    function saveCode() {
+        if (!latestAppCode) {
+            alert("Er is nog geen code gegenereerd!");
+            return;
+        }
+        
+        const isHTML = latestAppCode.toLowerCase().includes("<!doctype html>") || latestAppCode.toLowerCase().includes("<html");
+        const extension = isHTML ? ".html" : ".txt";
+        const type = isHTML ? 'text/html;charset=utf-8;' : 'text/plain;charset=utf-8;';
+
+        const blob = new Blob([latestAppCode], { type: type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const title = document.getElementById('app-title').value.trim().replace(/\s+/g, '_') || 'MijnApp';
+        a.download = title + "_v" + promptVersion + extension;
+        
+        document.body.appendChild(a);
+        a.click();
+        
+        setTimeout(() => { 
+            document.body.removeChild(a); 
+            URL.revokeObjectURL(url); 
+        }, 150);
+    }
+</script>
+</body>
+</html>
